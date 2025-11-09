@@ -1,0 +1,121 @@
+---
+title: "Discussion3.1"
+format: pdf
+---
+
+# Discussion3.1
+
+-   Subset the dataset into training and testing, and perform your analysis.
+
+-   Perform both a Manual and an Auto-selected model your project dataset. Explain your reasoning for the manual model hyperparameters you selected.
+
+-   Post both of your model time series plots.
+
+-   Construct a brief write-up comparing the results.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(fpp3)
+library(gt)
+#install.packages("urca")
+library(urca)
+```
+
+```{r}
+co2 <- read_csv("/Users/xuanwang/ADS506/co2.csv")
+```
+
+### 1. Data prep
+
+```{r}
+sum(is.na(co2))
+```
+
+```{r}
+co2 <- co2 |>
+  mutate(
+    Month = yearmonth(paste(year, month, sep = "-"))
+  ) |>
+  as_tsibble(index = Month) |>
+  select(Month, average) |>
+  filter(!is.na(average), average > 0)
+
+autoplot(co2, average) + 
+  labs(titel = "Mauna Loa CO2 Monthly Average", x = "Year", y = "CO2(ppm")
+
+```
+
+
+```{r}
+stl_fit <- model(co2, stl = STL(average))
+autoplot(components(stl_fit))
+
+```
+
+### 2. Train/Test split (80/20)
+
+```{r}
+n_total <- nrow(co2)
+n_train <- floor(0.8 * n_total)
+
+train <- slice_head(co2, n = n_train)
+test  <- slice_tail(co2, n = n_total - n_train)
+
+```
+
+### 3. Modeling
+
+```{r}
+co2_fit <- model(
+  train,
+  auto_tslm = TSLM(average ~ trend()),              # Auto: linear trend
+  manual_tslm = TSLM(average ~ trend() + season())    # Manual: trend + seasonality
+)
+
+co2_fc <- forecast(co2_fit, new_data = test)
+
+```
+
+### 4.auto_tslm plot
+
+```{r}
+autoplot(dplyr::filter(co2_fc, .model == "auto_tslm"), train) +
+  autolayer(test, average, color = "red") +
+  labs(
+    title = "Auto TSLM Forecast (Linear Trend): CO2 Monthly Average",
+    x = "Year", y = "CO2 (ppm)",
+    caption = "Red line: Test observations (20% of data 2010-2015)"
+  )
+```
+
+### 5 manual TSLM plot
+```{r}
+# ---- Plot: Manual TSLM ----
+autoplot(dplyr::filter(co2_fc, .model == "manual_tslm"), train) +
+  autolayer(test, average, color = "red") +
+  labs(
+    title = "Manual TSLM Forecast (Trend + Season): CO2 Monthly Average",
+    x = "Year", y = "CO2 (ppm)",
+    caption = "Red line: Test observations (20% of data 2010-2015)"
+  )
+
+```
+
+
+
+
+### 6 Accuracy comparison
+```{r}
+accuracy(co2_fc, test)
+```
+
+
+
+### 7 report
+```{r}
+report(dplyr::select(co2_fit, auto_tslm))
+report(dplyr::select(co2_fit, manual_tslm))
+```
+
+
