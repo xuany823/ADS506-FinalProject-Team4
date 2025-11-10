@@ -31,7 +31,6 @@ ts_data <- ts(data$average,
               start = c(1958, 3),
               frequency = 12)
 
-# Fit ARIMA model
 arima_model <- auto.arima(ts_data)
 summary(arima_model)
 
@@ -39,11 +38,15 @@ summary(arima_model)
 forecast_result <- forecast(arima_model, h = 24)
 print(forecast_result)
 
-# Plot the forecast
 plot(forecast_result, 
      main = "CO2 PPM Forecast",
      xlab = "Year",
      ylab = "CO2 PPM")
+
+```
+
+```{r}
+
 
 # Use deseasonalized data
 ts_data_adj <- ts(data$deseasonalized, 
