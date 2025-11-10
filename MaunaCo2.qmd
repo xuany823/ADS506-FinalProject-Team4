@@ -1,0 +1,60 @@
+---
+title: "Mauna CO2"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(forecast)
+```
+
+```{r}
+
+# TO MAKE co2_clean.csv
+#lines <- readLines("co2_mm_mlo.csv")
+#new_lines <- lines[41:length(lines)]
+#writeLines(new_lines, "co2_clean.csv")
+
+data <- read.csv("co2_clean.csv")
+
+# Check it
+head(data)
+dim(data)
+colnames(data)
+
+```
+
+```{r}
+
+# Create time series using 'average' column
+ts_data <- ts(data$average, 
+              start = c(1958, 3),
+              frequency = 12)
+
+# Fit ARIMA model
+arima_model <- auto.arima(ts_data)
+summary(arima_model)
+
+# Forecast next 24 months
+forecast_result <- forecast(arima_model, h = 24)
+print(forecast_result)
+
+# Plot the forecast
+plot(forecast_result, 
+     main = "CO2 PPM Forecast",
+     xlab = "Year",
+     ylab = "CO2 PPM")
+
+# Use deseasonalized data
+ts_data_adj <- ts(data$deseasonalized, 
+                  start = c(1958, 3),
+                  frequency = 12)
+
+arima_model_adj <- auto.arima(ts_data_adj)
+forecast_adj <- forecast(arima_model_adj, h = 24)
+
+plot(forecast_adj,
+     main = "CO2 PPM Forecast (Deseasonalized)",
+     xlab = "Year",
+     ylab = "CO2 PPM")
+```
