@@ -1,0 +1,130 @@
+---
+title: "Mauna Loa CO₂ — ETS"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+
+## Setup
+```{r}
+# Attach only tidyverts core
+library(tsibble)   # time index + tsibble
+library(fable)     # ETS + forecast
+library(feasts)    # autoplot + residual diagnostics
+```
+
+## Data & Cleaning (8 short steps)
+```{r}
+# Path to CSV from NOAA (update if needed)
+file_path <- "co2_mm_mlo.csv"
+
+# Read raw file (leave readr unattached)
+raw_co2 <- readr::read_csv(file_path, comment = "#", show_col_types = FALSE)
+
+# 1) structure check
+dplyr::glimpse(raw_co2)
+
+# 2) summary stats
+summary(dplyr::select(raw_co2, average, deseasonalized))
+
+# 3) missing detection
+sum(is.na(raw_co2$average))
+sum(raw_co2$average < 0, na.rm = TRUE)
+
+# 4) gap check
+raw_ts <- raw_co2 |>
+  dplyr::mutate(Month = yearmonth(sprintf("%d-%02d", year, month))) |>
+  as_tsibble(index = Month)
+has_gaps(raw_ts)
+
+# 5) date range
+range(raw_ts$Month)
+
+# 6) clean (use deseasonalized where average is negative)
+co2 <- raw_ts |>
+  dplyr::mutate(ppm = dplyr::if_else(average < 0, deseasonalized, average)) |>
+  dplyr::select(Month, ppm)
+
+# 7) final NA check
+sum(is.na(co2$ppm))
+
+# 8) quick visual
+autoplot(co2, ppm) +
+  ggplot2::labs(title = "Mauna Loa CO₂ (ppm)", x = NULL,
+                y = expression("CO"[2] * " (ppm)")) +
+  ggplot2::theme_minimal()
+```
+
+## Train/Test Split
+```{r}
+h <- 12
+n <- nrow(co2)
+train <- co2 |> dplyr::slice_head(n = n - h)
+test  <- co2 |> dplyr::slice_tail(n = h)
+list(train_start = min(train$Month), train_end = max(train$Month),
+     test_start  = min(test$Month),  test_end  = max(test$Month))
+```
+
+## Models
+```{r}
+models <- train |>
+  model(
+    manual_ets = ETS(ppm ~ error("M") + trend("A") + season("A")),
+    auto_ets   = ETS(ppm)
+  )
+report(models)
+```
+
+## Accuracy on Holdout
+```{r}
+fc_manual <- forecast(models[,"manual_ets"], h = h)
+fc_auto   <- forecast(models[,"auto_ets"],   h = h)
+
+acc_manual <- accuracy(fc_manual, test)
+acc_auto   <- accuracy(fc_auto, test)
+
+dplyr::bind_rows(
+  dplyr::mutate(acc_manual, model = "Manual ETS(M,A,A)"),
+  dplyr::mutate(acc_auto,   model = "Auto ETS")
+) |>
+  dplyr::arrange(RMSE)
+```
+Holdout accuracy over the 12-month test set is nearly identical for manual ETS(M,A,A) and auto-ETS (RMSE ≈ 0.231 ppm; MAE ≈ 0.213 ppm), with little bias (ME ≈ 0.154) and low residual autocorrelation (ACF1 ≈ −0.28).”
+
+## Plots
+```{r}
+autoplot(train, ppm) +
+  autolayer(test, ppm, series = "Test") +
+  autolayer(fc_manual, level = c(80, 95), series = "Manual ETS(M,A,A)") +
+  ggplot2::labs(title = "Manual ETS(M,A,A): Forecast vs 12-mo Test",
+                caption = "Black = test; shaded = 80/95% PI",
+                y = expression("CO"[2] * " (ppm)"), x = NULL) +
+  ggplot2::theme_minimal()
+```
+
+```{r}
+autoplot(train, ppm) +
+  autolayer(test, ppm, series = "Test") +
+  autolayer(fc_auto, level = c(80, 95), series = "Auto ETS") +
+  ggplot2::labs(title = "Auto ETS: Forecast vs 12-mo Test",
+                caption = "Black = test; shaded = 80/95% PI",
+                y = expression("CO"[2] * " (ppm)"), x = NULL) +
+  ggplot2::theme_minimal()
+```
+
+## Residual Diagnostics
+```{r}
+# gg_tsresiduals() needs exactly ONE model column at a time.
+# Use explicit namespace to avoid masking & keep deps minimal.
+models |>
+  dplyr::select(manual_ets) |>
+  feasts::gg_tsresiduals()
+
+models |>
+  dplyr::select(auto_ets) |>
+  feasts::gg_tsresiduals()
+```
+
