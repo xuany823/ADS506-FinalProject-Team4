@@ -1,0 +1,197 @@
+---
+title: "Discussion 4.1: Transformations and Time Series Cross-Validation"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+This analysis builds on the ETS(M,A,A) model developed in Discussion 3 to investigate whether a data transformation could improve forecasting performance. The approach includes examining residual diagnostics to determine if transformation is warranted, followed by time-series cross-validation using rolling origin to validate the model performance across multiple time periods.
+
+## Setup and Data Preparation
+
+```{r}
+# Minimal tidyverts stack
+library(tsibble)
+library(fable)
+library(feasts)
+
+# Update file_path to your CSV location before running
+file_path <- "co2_mm_mlo.csv"
+
+# Read the data (CSV from NOAA; monthly, gap-filled; 'average' used unless missing)
+# Using the same data preparation approach as Discussion 3
+co2_raw <- read.csv(file_path, comment.char = "#")
+
+co2 <- co2_raw |>
+  dplyr::mutate(
+    Month = yearmonth(sprintf("%d-%02d", year, month)),
+    ppm = dplyr::if_else(average < 0, deseasonalized, average)
+  ) |>
+  dplyr::select(Month, ppm) |>
+  as_tsibble(index = Month)
+
+# Split into train and test - same as Discussion 3
+h <- 12
+n <- nrow(co2)
+train <- co2 |> dplyr::slice_head(n = n - h)
+test <- co2 |> dplyr::slice_tail(n = h)
+```
+
+## 1) Restate Week 3 Model
+
+My Week 3 model is an ETS(M,A,A) model—multiplicative errors, additive trend, additive seasonality—fit to monthly CO₂ with a 12-month holdout (test RMSE 0.231 ppm, MAE 0.213 ppm). \## 2) Transformation Decision
+
+In Discussion 3, residual diagnostics showed that the residuals were centered around zero with no clear pattern, the ACF plot showed most lags within confidence bounds, and the distribution appeared approximately normal. However, before concluding that no transformation is needed, a closer examination of variance stability over time is warranted.
+
+```{r}
+# Fit the baseline model from Week 3
+fit_original <- train |>
+  model(ETS(ppm ~ error("M") + trend("A") + season("A")))
+
+# Re-examine residual diagnostics with focus on variance
+feasts::gg_tsresiduals(fit_original)
+```
+
+The residual diagnostics confirm the findings from Discussion 3. The residuals are centered around zero with no obvious trend or pattern, the ACF shows most lags within confidence bounds, and the histogram appears approximately normal.
+
+To further investigate variance stability, the residuals are plotted over time.
+
+```{r}
+# Extract residuals and plot variance over time
+resids <- fit_original |> residuals()
+
+# Plot residuals over time to check for changing variance
+autoplot(resids, .resid) +
+  ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "blue") +
+  ggplot2::labs(title = "Residuals Over Time",
+       y = "Residuals",
+       x = NULL) +
+  ggplot2::theme_minimal()
+```
+
+Looking at the residuals over time, the variance appears relatively stable throughout the series. **There is no obvious pattern of increasing or decreasing variance.** This stable variance pattern indicates that **a transformation is not needed**. **Based on these residual diagnostics, Path B (no transformation) is the appropriate choice.** However, a Box-Cox transformation with a moderate lambda value will still be tested to confirm that the original specification is adequate.
+
+## 3) Re-fit and Validate
+
+Following Path B, the original model will be compared against a Box-Cox transformation to confirm that transformation is not beneficial.
+
+### Test Box-Cox Transformation
+
+```{r}
+# Try a Box-Cox transformation with lambda = 0.3
+lambda <- 0.3
+
+fit_boxcox <- train |>
+  model(ETS(box_cox(ppm, lambda) ~ error("M") + trend("A") + season("A")))
+
+# Generate forecasts for both models
+fc_original <- forecast(fit_original, h = h)
+
+fc_boxcox <- forecast(fit_boxcox, h = h) |>
+  dplyr::mutate(.mean = inv_box_cox(.mean, lambda))
+
+# Compare accuracy on the test set
+acc_original <- accuracy(fc_original, test)
+acc_boxcox <- accuracy(fc_boxcox, test)
+
+dplyr::bind_rows(
+  dplyr::mutate(acc_original, Model = "ETS(M,A,A)"),
+  dplyr::mutate(acc_boxcox, Model = "ETS(M,A,A) + Box-Cox (λ=0.3)")
+) |>
+  dplyr::select(Model, .type, RMSE, MAE, MAPE) |>
+  dplyr::arrange(RMSE)
+```
+
+The test-set accuracy shows that the Box-Cox transformation actually performs worse than the original model, with higher RMSE and MAE. This confirms that transformation is not beneficial for this series.
+
+### Rolling-Origin Cross-Validation
+
+Rolling-origin time series cross-validation was implemented using `stretch_tsibble()` (Hyndman & Athanasopoulos, 2021).
+
+To further validate the model choice, time-series cross-validation using rolling origin is performed. This evaluates how the model performs across multiple time periods rather than just the single test set.
+
+```{r}
+# Set up rolling origin CV - start with 120 months (10 years) and step by 12 months
+# This creates multiple train/test splits within the training data
+
+cv_original <- train |>
+  stretch_tsibble(.init = 120, .step = 12) |>
+  model(ETS(ppm ~ error("M") + trend("A") + season("A"))) |>
+  forecast(h = 12)
+
+cv_boxcox <- train |>
+  stretch_tsibble(.init = 120, .step = 12) |>
+  model(ETS(box_cox(ppm, lambda) ~ error("M") + trend("A") + season("A"))) |>
+  forecast(h = 12) |>
+  dplyr::mutate(.mean = inv_box_cox(.mean, lambda))
+
+# Calculate accuracy for each fold, then average
+cv_acc_original <- accuracy(cv_original, train) |>
+  dplyr::group_by(.model) |>
+  dplyr::summarise(
+    RMSE = mean(RMSE, na.rm = TRUE),
+    MAE = mean(MAE, na.rm = TRUE)
+  )
+
+cv_acc_boxcox <- accuracy(cv_boxcox, train) |>
+  dplyr::group_by(.model) |>
+  dplyr::summarise(
+    RMSE = mean(RMSE, na.rm = TRUE),
+    MAE = mean(MAE, na.rm = TRUE)
+  )
+
+# Compare results
+dplyr::bind_rows(
+  dplyr::mutate(cv_acc_original, Model = "ETS(M,A,A)"),
+  dplyr::mutate(cv_acc_boxcox, Model = "ETS(M,A,A) + Box-Cox (λ=0.3)")
+) |>
+  dplyr::arrange(RMSE)
+```
+
+**Table: Rolling-origin CV averages by origin (lower RMSE/MAE is better)**
+
+The rolling-origin cross-validation results are consistent with the test-set evaluation. The original ETS(M,A,A) model has lower average RMSE and MAE across all folds compared to the Box-Cox transformed version. This provides additional evidence that the transformation does not improve forecast accuracy.
+
+## 4) Visualize Forecast Performance
+
+```{r}
+# Plot the forecast against test data
+autoplot(train, ppm) +
+  autolayer(test, ppm, color = "black", linewidth = 0.8) +
+  autolayer(fc_original, level = c(80, 95)) +
+  ggplot2::labs(
+    title = "ETS(M,A,A) Forecast vs 12-Month Test Set",
+    subtitle = "Original model without transformation",
+    y = expression("CO"[2] * " (ppm)"),
+    x = NULL,
+    caption = "Black line = actual test data; shaded regions = 80% and 95% prediction intervals"
+  ) +
+  ggplot2::theme_minimal()
+```
+
+The forecast plot shows that the original ETS(M,A,A) model captures both the trend and seasonal pattern well, with actual test values falling within the prediction intervals.
+
+```{r}
+# Create a table showing how the models performed across different metrics
+comparison_table <- dplyr::bind_rows(
+  dplyr::mutate(acc_original, Model = "ETS(M,A,A)", Set = "Test Set"),
+  dplyr::mutate(acc_boxcox, Model = "ETS(M,A,A) + Box-Cox", Set = "Test Set"),
+  dplyr::mutate(cv_acc_original, Model = "ETS(M,A,A)", Set = "CV Average"),
+  dplyr::mutate(cv_acc_boxcox, Model = "ETS(M,A,A) + Box-Cox", Set = "CV Average")
+) |>
+  dplyr::select(Model, Set, RMSE, MAE)
+
+comparison_table
+```
+
+## 5) Insights and Conclusions
+
+This analysis re-examined the Week 3 ETS(M,A,A) model to determine whether a data transformation could improve forecasting performance. A Box-Cox transformation with λ=0.3 was tested against the original specification. Both the single holdout test and rolling-origin cross-validation showed no accuracy improvement from the transformation; in fact, errors were consistently higher with the Box-Cox approach (test RMSE: 0.470 vs 0.231; CV RMSE: 0.652 vs 0.550). The diagnostic analysis confirmed that the residuals from the original model are centered around zero with stable variance throughout the series, and the forecast tracks the test period well with actual values falling within prediction intervals. Therefore, the untransformed ETS(M,A,A) model remains the most appropriate choice for forecasting monthly CO₂ concentrations. These findings validate the model selection from Discussion 3 and demonstrate that the model already captures the key features of the series effectively without requiring a variance-stabilizing transformation.
+
+## References
+
+Hyndman, R. J., & Athanasopoulos, G. (2021). *Forecasting: Principles and practice* (3rd ed.). OTexts. https://otexts.com/fpp3/tscv.html
