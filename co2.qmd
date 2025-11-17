@@ -1,0 +1,33 @@
+---
+title: "CO2 Analysis"
+format: pdf
+Contributor: Michelle_Wang, Vinh_Dao, Duy_Dang
+---
+
+## **ADS506-FinalProject-Team4**
+
+Overview: The analysis uses monthly CO2 measurements from Mauna Loa Observatory.
+
+# Data Preparation:
+
+```{r}
+#| message: false
+library(tidyverse)
+library(fpp3)
+library(gt)
+library(feasts)
+#library(urca)
+```
+
+```{r}
+co2 <- read_csv("data/co2.csv")
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
