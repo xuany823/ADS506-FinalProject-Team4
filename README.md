@@ -1,5 +1,4 @@
 # 📈 ADS506 Final Project – Mauna Loa Atmospheric CO₂ Forecasting
-**University of San Diego – Applied Data Science (ADS 506)**  
 **Team 4 – Final Team Project**
 
 ---
