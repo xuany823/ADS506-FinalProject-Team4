@@ -4,7 +4,7 @@
 
 ---
 
-## 📌 Project Overview
+## 📌 Project Overview  
 This repository contains the full codebase and documentation for our ADS-506 Final Team Project. Our team analyzes the **monthly atmospheric CO₂ concentrations recorded at Mauna Loa Observatory in Hawaii**, using time series forecasting techniques to understand long-term trends and project future CO₂ levels.
 
 📄 This repo includes our modeling scripts, exploratory analysis, data processing code, and fully reproducible workflow.
