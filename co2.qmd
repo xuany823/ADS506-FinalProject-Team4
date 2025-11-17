@@ -12,6 +12,7 @@ Overview: The analysis uses monthly CO2 measurements from Mauna Loa Observatory.
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(fpp3)
 library(gt)
@@ -23,11 +24,12 @@ library(feasts)
 co2 <- read_csv("data/co2.csv")
 ```
 
-You can add options to executable code like this
+## EDA
+
+### Check missing value
 
 ```{r}
-#| echo: false
-2 * 2
+sum(is.na(co2))
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
