@@ -8,6 +8,10 @@ Contributor: Michelle_Wang, Vinh_Dao, Duy_Dang
 
 Overview: The analysis uses monthly CO2 measurements from Mauna Loa Observatory.
 
+NOAA Global Monitoring Laboratory\
+Atmospheric CO₂, Mauna Loa Observatory – Monthly Dataset\
+<https://gml.noaa.gov/ccgg/trends/data.html>
+
 # Data Preparation:
 
 ```{r}
@@ -21,15 +25,161 @@ library(feasts)
 ```
 
 ```{r}
-co2 <- read_csv("data/co2.csv")
+co2_raw <- read_csv("data/co2.csv")
 ```
 
 ## EDA
 
-### Check missing value
+### 1-4
 
 ```{r}
-sum(is.na(co2))
+# 1. Basic cleaning / handle missing values
+sum(is.na(co2_raw))
+
+# 2. Create a proper time index and tsibble
+co2_ts <- co2_raw |>
+  mutate(Month = yearmonth(paste(year, month, "01", sep = "-"))) |>
+  as_tsibble(index = Month)
+
+# 3. Confirm tsibble
+co2_ts |>
+  knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
+  
+#4. Summary of co2 data
+co2_ts |>
+  summarise(
+    start_year   = min(year(Month)),
+    end_year     = max(year(Month)),
+    n_months     = n(),
+    mean_co2     = mean(average, na.rm = TRUE),
+    sd_co2       = sd(average, na.rm = TRUE),
+    min_co2      = min(average, na.rm = TRUE),
+    max_co2      = max(average, na.rm = TRUE),
+    mean_deseas  = mean(deseasonalized, na.rm = TRUE))
+
+co2_ts |>
+  knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+### 5. Time Series Plot
+
+```{r}
+# 5. Time Seires Plot
+# 5.1 all raw data time series plot
+co2_ts |>
+  autoplot(average) +
+  labs(title = "Monthly Mauna Loa CO2 (ppm)",
+       x = "Year",y = "CO₂ (ppm)")
+
+# 5.2. plot of latest 20 years 
+latest_year <- max(year(co2_ts$Month), na.rm = TRUE)
+
+
+co2_ts |>
+  filter(year(Month) >= latest_year - 20) |>
+  autoplot(average) +
+  labs(title = "Monthly Mauna Loa CO₂ (ppm), Last 20 Years", 
+       x = "Year", y = "CO₂ (ppm)")
+
+# 5.3 Compare average and deseasonalized
+co2_ts |>pivot_longer(
+  cols = c(average, deseasonalized), names_to = "series", values_to = "value") |>
+  autoplot(value) +
+  labs(title = "Mauna Loa CO₂: Raw vs. Deseasonalized",
+    x = "Year",
+    y = "CO2 (ppm)")
+
+```
+
+### 6. Seasonality exploration
+
+```{r}
+# 
+# 6.1 Seasonal Plot
+co2_ts |>
+  gg_season(average) +
+  labs(title = "Seasonal Plot of Monthly CO2", y = "CO₂ (ppm)",x = "Month")
+
+# 6.2 Subseries plot 
+co2_ts |>
+  gg_subseries(average) +
+  labs(title = "Subseries Plot of Monthly CO2 by Month",
+    y = "CO₂ (ppm)", x = "Year")
+```
+
+### 7. Distribution & outliers
+
+```{r}
+# 7. Distribution & outliers
+# 7.1 Histogram of CO2
+co2_ts |>
+  ggplot(aes(x = average)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Distribution of Monthly CO₂",
+    x = "CO2 (ppm)",
+    y = "Count"
+  )
+
+# 7.2 Boxplot by month
+co2_ts |>
+  mutate(Month_f = factor(month(Month, label = TRUE))) |>
+  ggplot(aes(x = Month_f, y = average)) +
+  geom_boxplot() +
+  labs(
+    title = "Monthly CO₂ Distribution by Calendar Month",
+    x = "Month",
+    y = "CO₂ (ppm)"
+  )
+
+# 7.3 Boxplot by decade
+co2_ts |>
+  mutate(decade = factor((year(Month) %/% 10) * 10)) |>
+  ggplot(aes(x = decade, y = average)) +
+  geom_boxplot() +
+  labs(
+    title = "CO₂ Levels by Decade",
+    x = "Decade",
+    y = "CO₂ (ppm)"
+  )
+```
+
+### 8. Autocorrelation & decomposition
+
+```{r}
+# 8. Autocorrelation & decomposition
+# 8.1 ACF of CO₂
+co2_ts |>
+  ACF(average) |>
+  autoplot() +
+  labs(title = "ACF of Monthly CO2", x = "Lag (months)", y = "ACF")
+
+# 8.2 STL decomposition (trend + season + remainder)
+co2_stl <- co2_ts |>
+  model(stl = STL(average ~ season(window = "periodic"))) |>
+  components()
+
+autoplot(co2_stl) + labs(title = "STL Decomposition of Monthly CO2")
+
+```
+
+```{r}
+# 9. Simple check on ndays / data quality
+# Relationship between ndays and average CO2
+co2_ts |>
+  ggplot(aes(x = ndays, y = average)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Relationship between Number of Days Sampled and Monthly CO2",
+    x = "Number of Days (ndays)",
+    y = "CO2 (ppm)"
+  )
+
+# Trend of measurement uncertainty over time
+co2_ts |> autoplot(unc) + labs(
+    title = "Measurement Uncertainty (unc) Over Time",
+    x = "Year", y = "Uncertainty")
+```
+
+## Preprocessing
+
+1\.
