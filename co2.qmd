@@ -69,7 +69,7 @@ co2_ts |>
 co2_ts |>
   autoplot(average) +
   labs(title = "Monthly Mauna Loa CO2 (ppm)",
-       x = "Year",y = "CO₂ (ppm)")
+       x = "Year",y = "CO2 (ppm)")
 
 # 5.2. plot of latest 20 years 
 latest_year <- max(year(co2_ts$Month), na.rm = TRUE)
@@ -78,14 +78,14 @@ latest_year <- max(year(co2_ts$Month), na.rm = TRUE)
 co2_ts |>
   filter(year(Month) >= latest_year - 20) |>
   autoplot(average) +
-  labs(title = "Monthly Mauna Loa CO₂ (ppm), Last 20 Years", 
-       x = "Year", y = "CO₂ (ppm)")
+  labs(title = "Monthly Mauna Loa CO2 (ppm), Last 20 Years", 
+       x = "Year", y = "CO2 (ppm)")
 
 # 5.3 Compare average and deseasonalized
 co2_ts |>pivot_longer(
   cols = c(average, deseasonalized), names_to = "series", values_to = "value") |>
   autoplot(value) +
-  labs(title = "Mauna Loa CO₂: Raw vs. Deseasonalized",
+  labs(title = "Mauna Loa CO2: Raw vs. Deseasonalized",
     x = "Year",
     y = "CO2 (ppm)")
 
@@ -98,16 +98,16 @@ co2_ts |>pivot_longer(
 # 6.1 Seasonal Plot
 co2_ts |>
   gg_season(average) +
-  labs(title = "Seasonal Plot of Monthly CO2", y = "CO₂ (ppm)",x = "Month")
+  labs(title = "Seasonal Plot of Monthly CO2", y = "CO2 (ppm)",x = "Month")
 
 # 6.2 Subseries plot 
 co2_ts |>
   gg_subseries(average) +
   labs(title = "Subseries Plot of Monthly CO2 by Month",
-    y = "CO₂ (ppm)", x = "Year")
+    y = "CO2 (ppm)", x = "Year")
 ```
 
-### 7. Distribution & outliers
+### 7. Distribution & outliners
 
 ```{r}
 # 7. Distribution & outliers
@@ -116,7 +116,7 @@ co2_ts |>
   ggplot(aes(x = average)) +
   geom_histogram(bins = 30) +
   labs(
-    title = "Distribution of Monthly CO₂",
+    title = "Distribution of Monthly CO2",
     x = "CO2 (ppm)",
     y = "Count"
   )
@@ -127,9 +127,9 @@ co2_ts |>
   ggplot(aes(x = Month_f, y = average)) +
   geom_boxplot() +
   labs(
-    title = "Monthly CO₂ Distribution by Calendar Month",
+    title = "Monthly CO2 Distribution by Calendar Month",
     x = "Month",
-    y = "CO₂ (ppm)"
+    y = "CO2 (ppm)"
   )
 
 # 7.3 Boxplot by decade
@@ -138,9 +138,9 @@ co2_ts |>
   ggplot(aes(x = decade, y = average)) +
   geom_boxplot() +
   labs(
-    title = "CO₂ Levels by Decade",
+    title = "CO2 Levels by Decade",
     x = "Decade",
-    y = "CO₂ (ppm)"
+    y = "CO2 (ppm)"
   )
 ```
 
@@ -163,6 +163,8 @@ autoplot(co2_stl) + labs(title = "STL Decomposition of Monthly CO2")
 
 ```
 
+### 9. Simple check on ndays / data quality
+
 ```{r}
 # 9. Simple check on ndays / data quality
 # Relationship between ndays and average CO2
@@ -182,4 +184,38 @@ co2_ts |> autoplot(unc) + labs(
 
 ## Preprocessing
 
-1\.
+## 1. Model Diagnostics
+
+#### 1.1  **Evaluate if transformation (e.g., Box–Cox) is needed**
+
+Auto ARIMA for residual dignostics
+
+```{r}
+fit <- co2_ts |>
+  model(
+    arima = ARIMA(average))
+
+fit |>
+  select(arima) |>
+  gg_tsresiduals()
+```
+
+#### 1.2 **Evaluate if differencing is needed**
+
+```{r}
+# KPSS Test
+co2_ts |> features(average, unitroot_kpss) |>
+  knitr::kable(digits = 1)
+
+# ACF 
+co2_ts |> 
+  ACF(average) |> 
+  autoplot()
+
+# PACF
+co2_ts |>
+  PACF(average) |> 
+  autoplot()
+```
+
+#### **1.3 Evaluate if transformation (e.g., Box–Cox) is needed**
