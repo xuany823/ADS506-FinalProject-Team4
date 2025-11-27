@@ -64,7 +64,7 @@ co2_ts |>
   knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
 ```
 
-## 2.5. Time Series **Visualization (**Plot)
+## 2.5. Original CO2 Time Series **Visualization (**Plot)
 
 ```{r}
 # 5. Time Seires Plot
@@ -146,17 +146,10 @@ co2_ts |>
   )
 ```
 
-## 2.8. Autocorrelation & decomposition
+## 2.8. STL - decomposition
 
 ```{r}
-# 8. Autocorrelation & decomposition
-# 8.1 ACF of CO₂
-co2_ts |>
-  ACF(average) |>
-  autoplot() +
-  labs(title = "ACF of Monthly CO2", x = "Lag (months)", y = "ACF")
-
-# 8.2 STL decomposition (trend + season + remainder)
+# STL decomposition (trend + season + remainder)
 co2_stl <- co2_ts |>
   model(stl = STL(average ~ season(window = "periodic"))) |>
   components()
@@ -165,7 +158,16 @@ autoplot(co2_stl) + labs(title = "STL Decomposition of Monthly CO2")
 
 ```
 
-## 2.9. Simple check on ndays / data quality
+**Modeling Evidence: Acceleration in the CO₂ Trend**
+
+To assess whether CO₂ levels have been rising at a constant rate or accelerating over time, I fitted an STL decomposition to the full monthly series. The extracted trend component shows a noticeable change in curvature: the slope is relatively moderate during the 1960s–1980s, but becomes substantially steeper from the 1990s onward. This indicates that the long-term increase is not linear—**the rate of CO₂ accumulation has accelerated in recent decades**.
+
+**STL decomposition showing an increasingly steep trend component (App settings: Full dataset, default STL).**
+
+This evidence reinforces the visual observation from the raw series: the Keeling Curve’s upward drift has intensified, meaning that each additional year contributes a larger increment than the previous one.
+
+## 
+2.9. Simple check on ndays / data quality
 
 ```{r}
 # 9. Simple check on ndays / data quality
@@ -190,7 +192,7 @@ Model Diagnostics
 
 ## 3.1 Evaluate if smoothing is needed
 
-Residual Diagnostic Plots
+**Residual Diagnostic Plots**
 
 ```{r}
 # KPSS test for stationarity
@@ -225,7 +227,7 @@ co2_ts |>
 
 Given the findings from previous EDA steps, we ran some preprocessing steps by fitting an automatic ARIMA model and examining its residual diagnostics to further assess whether a variance-stabilizing transformation such as Box–Cox was necessary. The residual plots (Figure 11)from gg_tsresiduals() showed no systematic structure, no increasing spread over time, and no evidence of non-constant variance, indicating that the model errors behave approximately like white noise. The ACF of the residuals also remained within sampling bounds, suggesting no remaining autocorrelation that would indicate a need for transformation. From the plot, these diagnostics indicate that a Box-Cox or log transformation is not required for this dataset.
 
-Auto ARIMA for residual dignostics
+**Auto ARIMA for residual dignostics**
 
 ```{r}
 fit <- co2_ts |>
@@ -243,7 +245,7 @@ Practice: testing a Box–Cox transformation may still enhance model flexibility
 
 ## 3.4 Summary of EDA & Preprocessing Insights
 
-A strong, nonlinear upward trend Highly stable annual seasonality No problematic outliers Minimal missing data and clean measurement structure Strong autocorrelation and non-stationarity( theoretically) No strong need for variance transformation (but may be explored for model refinement) ARIMA models will require differencing
+A strong, nonlinear upward trend Highly stable annual seasonality No problematic outliers Minimal missing data and clean measurement structure Strong autocorrelation and non-stationarity( theoretically) No strong need for variance transformation (but may be explored for model refinement) ARIMA models will require differencing.
 
 ## 3.5 Tsibble Formatting (Before modeling)
 
@@ -270,11 +272,7 @@ n_total  <- nrow(co2)
 n_train  <- floor(0.8 * n_total)
 
 co2_train <- co2 |> slice(1:n_train)
-
 co2_test  <- co2 |> slice((n_train + 1):n_total)
-
-co2_train
-co2_test
 ```
 
 ## 4.2 Models
@@ -282,6 +280,7 @@ co2_test
 Build auto TSLM, ETS and ARIMA using the untransformed series. Build TSLM, ETS, and ARIMA using the log-transformed series. Include a seasonal naive model (on the untransformed data)
 
 ```{r}
+#| warning: false
 # 5.2 Models to Fit (all automatic, and transformation)
 
 co2_fit <- co2_train |>
@@ -311,7 +310,7 @@ knitr::kable(train_acc,
   caption = "Training accuracy for automatic training models (80% training set)")
 ```
 
-## 4.4 Forecasting and Forecast Accuracy on Test Set
+## 4. Forecasting and Forecast Accuracy on Test Set
 
 ```{r}
 # Forecast horizon = length of test set
@@ -395,7 +394,7 @@ autoplot(fc_1968, co2) + labs(
   coord_cartesian(xlim = c(yearmonth("1958-03"), yearmonth("1968-12")))
 ```
 
-### Rolling-Origin Cross-Validation (10-year initial window, 1-year increments) 
+### Rolling-Origin Cross-Validation (10-year initial window, 1-year increments)
 
 -   create a tsibble with cross-validation series that starts with 10 years (118 months) of data and adds one year at time through 2024.
 -   Fit the same models from the previous step
@@ -419,7 +418,7 @@ co2_cv <- co2 |>
 co2_cv_fit <- co2_cv |>
   model(log_tslm  = TSLM(log(average) ~ trend() + season()),
         log_ets   = ETS(log(average)),
-        log_arima = ARIMA(log(average)),
+        log_arima = ARIMA(log(average), stepwise = TRUE, approximation = TRUE),
         snaive    = SNAIVE(average)) 
 
 # 4. Add ensemble AFTER fitting base models
@@ -593,3 +592,13 @@ autoplot(co2_final_fc, co2_recent) +
   ) +
   theme_minimal()
 ```
+
+The 12-month forecast from **September 2025 to August 2026** shows:
+
+1.  **A continued upward trend**, consistent with the long-term trajectory of the Mauna Loa CO₂ series.
+
+2.  **Seasonal oscillations**, with CO₂ peaking around May and dipping around late summer.
+
+3.  **Prediction intervals that widen over time**, indicating greater forecast uncertainty at longer horizons.
+
+This behavior is consistent with both the historical pattern of the Keeling Curve and the error structure identified in model diagnostics.
