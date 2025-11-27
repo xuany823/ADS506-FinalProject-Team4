@@ -12,7 +12,7 @@ NOAA Global Monitoring Laboratory\
 Atmospheric CO₂, Mauna Loa Observatory – Monthly Dataset\
 <https://gml.noaa.gov/ccgg/trends/data.html>
 
-# Data Preparation:
+# 1. Data Preparation:
 
 ```{r}
 #| message: false
@@ -21,6 +21,9 @@ library(tidyverse)
 library(fpp3)
 library(gt)
 library(feasts)
+library(dplyr)
+library(fable)
+library(fabletools)
 #library(urca)
 ```
 
@@ -28,9 +31,9 @@ library(feasts)
 co2_raw <- read_csv("data/co2.csv")
 ```
 
-## EDA
+# 2. EDA
 
-### 1-4 **Basic Descriptive Statistics**
+## 2.(1-4) **Basic Descriptive Statistics**
 
 ```{r}
 # 1. Basic cleaning / handle missing values
@@ -61,7 +64,7 @@ co2_ts |>
   knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
 ```
 
-### 5. Time Series **Visualization (**Plot)
+## 2.5. Time Series **Visualization (**Plot)
 
 ```{r}
 # 5. Time Seires Plot
@@ -90,7 +93,7 @@ co2_ts |>pivot_longer(
 
 ```
 
-### 6. Seasonality exploration
+### 2.6. Seasonality exploration
 
 ```{r}
 # 
@@ -106,7 +109,7 @@ co2_ts |>
     y = "CO2 (ppm)", x = "Year")
 ```
 
-### 7. Distribution & outliners
+### 2.7. Distribution & outliners
 
 ```{r}
 # 7. Distribution & outliers
@@ -143,7 +146,7 @@ co2_ts |>
   )
 ```
 
-### 8. Autocorrelation & decomposition
+### 2.8. Autocorrelation & decomposition
 
 ```{r}
 # 8. Autocorrelation & decomposition
@@ -162,7 +165,7 @@ autoplot(co2_stl) + labs(title = "STL Decomposition of Monthly CO2")
 
 ```
 
-### 9. Simple check on ndays / data quality
+### 2.9. Simple check on ndays / data quality
 
 ```{r}
 # 9. Simple check on ndays / data quality
@@ -181,11 +184,46 @@ co2_ts |> autoplot(unc) + labs(
     x = "Year", y = "Uncertainty")
 ```
 
-## Preprocessing
+## 3. Preprocessing
 
-## 1. Model Diagnostics
+Model Diagnostics
 
-#### 1.1 **Evaluate if transformation (e.g., Box–Cox) is needed**
+### 3.1 Evaluate if smoothing is needed
+
+Residual Diagnostic Plots
+
+```{r}
+# KPSS test for stationarity
+co2_ts |>
+    features(average, c(unitroot_kpss, unitroot_ndiffs, unitroot_nsdiffs))
+
+# Plot the ACF/PACF on the stationary time series
+co2_ts |> gg_tsdisplay(average, plot_type = "partial")
+```
+
+We evaluated whether additional smoothing was necessary by examining the stability of the trend and seasonal patterns in the raw monthly CO2 series (Figure1). Figure 1 showed a very smooth long-term upward trajectory with minimal short-term noise, indicating that the underlying trend is already well-behaved and does not require moving averages or other smoothing techniques. Seasonal diagnostics (Figure 4 and Figure 5) showed a highly regular and stable annual cycle, further suggesting that no smoothing is needed to refine or enhance the seasonal pattern. The STL decomposition plot (Figure 10) reinforced these observations: the trend component was smooth and continuous, and the remainder showed no unusual fluctuations. Together, these results indicate that the CO2 series does not require additional smoothing prior to modeling, and the raw monthly values can be used directly in TSLM or ARIMA-based forecasts. However, further smoothing would be necessary if short-term volatility, irregular spikes, or noise were present that obscured the underlying structure, as smoothing would help isolate the signal and improve model interpretability prior to forecasting.
+
+### 3.2 **Evaluate if differencing is needed**
+
+To determine whether differencing was required, our process is using visual diagnostics, autocorrelation patterns, formal unit root testing, and ARIMA model behavior. The raw series exhibits a persistent upward trend, and its ACF shows a slow, gradual decay - both signs of non-stationarity.
+
+The KPSS test returned a very small p-value (0.01), leading us to reject the null hypothesis of stationarity. This indicates that the raw CO2 series is non-stationary and therefore requires at least one regular difference (d = 1) to achieve stationarity prior to modeling.
+
+```{r}
+# ACF 
+co2_ts |> 
+  ACF(average) |> 
+  autoplot()
+
+# PACF
+co2_ts |>
+  PACF(average) |> 
+  autoplot()
+```
+
+### 3.3 **Evaluate if transformation (e.g., Box–Cox) is needed**
+
+Given the findings from previous EDA steps, we ran some preprocessing steps by fitting an automatic ARIMA model and examining its residual diagnostics to further assess whether a variance-stabilizing transformation such as Box–Cox was necessary. The residual plots (Figure 11)from gg_tsresiduals() showed no systematic structure, no increasing spread over time, and no evidence of non-constant variance, indicating that the model errors behave approximately like white noise. The ACF of the residuals also remained within sampling bounds, suggesting no remaining autocorrelation that would indicate a need for transformation. From the plot, these diagnostics indicate that a Box-Cox or log transformation is not required for this dataset.
 
 Auto ARIMA for residual dignostics
 
@@ -199,22 +237,149 @@ fit |>
   gg_tsresiduals()
 ```
 
-#### 1.2 **Evaluate if differencing is needed**
+If here we are diagnosing that a Box–Cox transformation was not required, I was referring specifically to the variance-stability diagnostic. The residual plots did not show increasing variance or multiplicative seasonal effects, so from a theoretical standpoint, a transformation isn’t needed to satisfy model assumptions. However, that does not mean a transformation could not improve the model. In practice, even with roughly stable variance, a Box–Cox scan can still be useful for detecting mild skewness or subtle amplitude shifts that only become visible after differencing. Sometimes a small λ adjustment can reduce low-lag autocorrelation and lead to more stable forecast errors across horizons. So again, similar to seasonal differencing: Theory: transformation is not necessary for variance stabilization.
 
+Practice: testing a Box–Cox transformation may still enhance model flexibility and residual behavior. These two perspectives are complementary rather than contradictory.
+
+### 3.4 Summary of EDA & Preprocessing Insights
+
+A strong, nonlinear upward trend Highly stable annual seasonality No problematic outliers Minimal missing data and clean measurement structure Strong autocorrelation and non-stationarity( theoretically) No strong need for variance transformation (but may be explored for model refinement) ARIMA models will require differencing
+
+### 3.5 Tsibble Formatting (Before modeling)
 ```{r}
-# KPSS Test
-co2_ts |> features(average, unitroot_kpss) |>
-  knitr::kable(digits = 1)
-
-# ACF 
-co2_ts |> 
-  ACF(average) |> 
-  autoplot()
-
-# PACF
-co2_ts |>
-  PACF(average) |> 
-  autoplot()
+co2 <- co2_ts |>
+  mutate(Month = yearmonth(paste(year, month, sep = "-"))) |>
+  as_tsibble(index = Month) |>
+  select(Month, average) |>
+  filter(!is.na(average), average > 0)
 ```
 
-#### **1.3 Evaluate if transformation (e.g., Box–Cox) is needed**
+## 4. Model Building
+
+Based on the earlier EDA and preprocessing steps, the Mauna Loa CO₂ series shows a strong nonlinear upward trend, highly regular annual seasonality, and approximately constant variance. Therefore, we proceed without any log or Box–Cox transformation and fit several automatic benchmark models to the untransformed monthly averages. To enable out-of-sample evaluation, we split the data into an 80/20 train–test partition and compare model performance across four classes: TSLM, ETS, ARIMA, and NNAR. \### 4.1 Train/Test Split
+### 4.1 Train/Test Split (80/20)
+
+```{r}
+
+# co2: tsibble with index = Month (or yearmonth) and response = average
+# Replace 'co2_ts' and 'average' with actual object/column names 
+
+n_total  <- nrow(co2)
+n_train  <- floor(0.8 * n_total)
+
+co2_train <- co2 |> slice(1:n_train)
+
+co2_test  <- co2 |> slice((n_train + 1):n_total)
+
+co2_train
+co2_test
+```
+
+### 4.2 Models
+
+Build auto TSLM, ETS and ARIMA using the untransformed series.
+Build TSLM, ETS, and ARIMA using the log-transformed series.
+Include a seasonal naive model (on the untransformed data)
+```{r}
+# 5.2 Models to Fit (all automatic, and transformation)
+
+co2_fit <- co2_train |>
+  model(
+    auto_tslm  = TSLM(average ~ trend() + season()),
+    auto_ets   = ETS(average),
+    auto_arima = ARIMA(average),
+    log_tslm = TSLM(log(average) ~ trend() + season()),
+    log_ets  = ETS(log(average)),
+    log_arima = ARIMA(log(average)),
+    snaive    = SNAIVE(average))
+    #auto_nnar  = NNETAR(average, repeats = 5)
+
+```
+### 4.3 Training Accuracy Table
+```{r}
+# Training accuracy on the 80% training set
+train_acc <- co2_fit |>
+  accuracy() |>
+  arrange(RMSE) |>
+  select(.model, .type, RMSE, MAE, MAPE, MPE)
+
+knitr::kable(train_acc,
+  digits = 2,
+  caption = "Training accuracy for automatic training models (80% training set)")
+```
+
+### 4.4 Forecasting and Forecast Accuracy on Test Set
+```{r}
+# Forecast horizon = length of test set
+co2_fc <- co2_fit |>
+  forecast(new_data = co2_test)
+
+#co2_fc
+
+# Plot forecasts against the full series
+co2_fc |> autoplot(co2) +
+  labs(title = "Forecasts from automatic TSLM, ETS, ARIMA, and NNAR models",
+    x = "Month", y = "Mauna Loa CO₂ (ppm)"
+  )
+
+# Forecast (test) accuracy on the 20% hold-out period
+test_acc <- co2_fc |>
+  accuracy(co2_test) |>
+  arrange(RMSE) |>
+  select(.model, .type, RMSE, MAE, MAPE, MPE)
+
+knitr::kable(test_acc, digits = 2,
+             caption = "Forecast accuracy on the 20% hold-out period")
+
+```
+
+### 4.5 Model Comparison and Selection
+
+As above training accuracy Table and Forecasting accuracy(test set) Table  summarize the in-sample and out-of-sample performance for all candidate models.  
+On the training set, the automatic ARIMA and ETS models (with and without log transformation) achieved very similar RMSE and MAE, while the TSLM variants and the seasonal naïve model performed noticeably worse. However, the forecast accuracy on the 20% hold-out period tells a clearer story: the log-transformed ARIMA model (`log_arima`) achieves the lowest RMSE and MAE, followed by the log-transformed ETS model (`log_ets`). Both transformed models substantially outperform their untransformed counterparts, the TSLM models, and the naïve benchmark.
+
+These results suggest that even though our EDA did not indicate a strong theoretical need for a variance-stabilizing transformation, the log scale leads to better generalization for ARIMA and ETS. Given its best forecast accuracy and relatively simple structure, we select the **log ARIMA model** as the final model for reporting and interpretation in the remainder of the analysis.
+### 4.6 Final Model Diagnostics
+
+
+
+4.7 Final Model Forecasts
+Use the best performing model to create a forecast for each month in 1995.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
