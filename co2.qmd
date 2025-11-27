@@ -30,7 +30,7 @@ co2_raw <- read_csv("data/co2.csv")
 
 ## EDA
 
-### 1-4
+### 1-4 **Basic Descriptive Statistics**
 
 ```{r}
 # 1. Basic cleaning / handle missing values
@@ -61,7 +61,7 @@ co2_ts |>
   knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
 ```
 
-### 5. Time Series Plot
+### 5. Time Series **Visualization (**Plot)
 
 ```{r}
 # 5. Time Seires Plot
@@ -73,7 +73,6 @@ co2_ts |>
 
 # 5.2. plot of latest 20 years 
 latest_year <- max(year(co2_ts$Month), na.rm = TRUE)
-
 
 co2_ts |>
   filter(year(Month) >= latest_year - 20) |>
@@ -186,7 +185,7 @@ co2_ts |> autoplot(unc) + labs(
 
 ## 1. Model Diagnostics
 
-#### 1.1  **Evaluate if transformation (e.g., Box–Cox) is needed**
+#### 1.1 **Evaluate if transformation (e.g., Box–Cox) is needed**
 
 Auto ARIMA for residual dignostics
 
