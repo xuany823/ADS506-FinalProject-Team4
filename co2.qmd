@@ -1,7 +1,7 @@
 ---
 title: "CO2 Analysis"
+author: "Michelle_Wang, Vinh_Dao, Duy_Dang"
 format: pdf
-Contributor: Michelle_Wang, Vinh_Dao, Duy_Dang
 ---
 
 ## **ADS506-FinalProject-Team4**
@@ -45,23 +45,20 @@ co2_ts <- co2_raw |>
   as_tsibble(index = Month)
 
 # 3. Confirm tsibble
-co2_ts |>
-  knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
+#co2_ts |>
+  #knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
   
 #4. Summary of co2 data
-co2_ts |>
-  summarise(
-    start_year   = min(year(Month)),
-    end_year     = max(year(Month)),
-    n_months     = n(),
-    mean_co2     = mean(average, na.rm = TRUE),
-    sd_co2       = sd(average, na.rm = TRUE),
-    min_co2      = min(average, na.rm = TRUE),
-    max_co2      = max(average, na.rm = TRUE),
-    mean_deseas  = mean(deseasonalized, na.rm = TRUE))
-
-co2_ts |>
-  knitr::kable(digits = 1, caption = "Overall summary of CO2 average" )
+#co2_ts |>
+  #summarise(
+    #start_year   = min(year(Month)),
+    #end_year     = max(year(Month)),
+    #n_months     = n(),
+    #mean_co2     = mean(average, na.rm = TRUE),
+    #sd_co2       = sd(average, na.rm = TRUE),
+    #min_co2      = min(average, na.rm = TRUE),
+    #max_co2      = max(average, na.rm = TRUE),
+    #mean_deseas  = mean(deseasonalized, na.rm = TRUE))
 ```
 
 ## 2.5. Original CO2 Time Series **Visualization (**Plot)
@@ -167,6 +164,7 @@ To assess whether CO₂ levels have been rising at a constant rate or accelerati
 This evidence reinforces the visual observation from the raw series: the Keeling Curve’s upward drift has intensified, meaning that each additional year contributes a larger increment than the previous one.
 
 ## 
+
 2.9. Simple check on ndays / data quality
 
 ```{r}
@@ -310,7 +308,7 @@ knitr::kable(train_acc,
   caption = "Training accuracy for automatic training models (80% training set)")
 ```
 
-## 4. Forecasting and Forecast Accuracy on Test Set
+## 4.4 Forecast Test set Accuracy
 
 ```{r}
 # Forecast horizon = length of test set
@@ -336,9 +334,17 @@ knitr::kable(test_acc, digits = 2,
 
 ```
 
-## 4.5 Rolling Origin Cross-validation
+## 4.5 Best model parameters
 
-### Compare models the first 10 years of the CO2 training data (no CV)
+Which is the best performance model on test set and training set? what are the model parameters? The best performing model on both the training and test sets is the log_ets model. The model parameters for the log_ets model are as follows. We also gather the parameters for all models for rolling origin cross validation modeling.
+
+```{r}
+co2_fit |> t()
+```
+
+## 4.6 Rolling Origin Cross-validation
+
+### Step1: Compare models the first 10 years of the CO2 training data (no CV)
 
 -   Use only the first 10 years of the data
 -   Create the 3 models above on the log transformed data
@@ -394,13 +400,14 @@ autoplot(fc_1968, co2) + labs(
   coord_cartesian(xlim = c(yearmonth("1958-03"), yearmonth("1968-12")))
 ```
 
-### Rolling-Origin Cross-Validation (10-year initial window, 1-year increments)
+### Step2: Rolling-Origin Cross-Validation (10-year initial window, 1-year increments)
 
 -   create a tsibble with cross-validation series that starts with 10 years (118 months) of data and adds one year at time through 2024.
 -   Fit the same models from the previous step
 -   Report the model metrics sorted by RMSE for each model across all validation intervals.
 
 ```{r co2_cv, cache=TRUE}
+#| warning: false
 # 1. Define initial window length: first 10 calendar years
 # 1958-03 to 1967-12 (118 months)
 co2_train_10 |> nrow() 
@@ -417,8 +424,8 @@ co2_cv <- co2 |>
 # to run in a cloud environment due to repeated ARIMA/ETS refitting across many windows.
 co2_cv_fit <- co2_cv |>
   model(log_tslm  = TSLM(log(average) ~ trend() + season()),
-        log_ets   = ETS(log(average)),
-        log_arima = ARIMA(log(average), stepwise = TRUE, approximation = TRUE),
+        log_ets   = ETS(log(average) ~ error("A") + trend("A") + season("A")),
+        log_arima = ARIMA(log(average) ~ pdq(1,1,1) + PDQ(2,1,2)),
         snaive    = SNAIVE(average)) 
 
 # 4. Add ensemble AFTER fitting base models
@@ -453,25 +460,21 @@ co2_cv_acc |>
 #  most recently 24 month data
 co2_recent <- co2 |>
   filter(Month > last_obs - 24)
-
 #  last id of rolling window
-last_id <- max(co2_cv_fc_trim$.id)
+last_id<- max(co2_cv_fc_trim$.id)
 
 #  last window of forecast
-co2_cv_fc_last <- co2_cv_fc_trim |>
-  filter(.id == last_id)
+co2_cv_fc_last<- co2_cv_fc_trim|>filter(.id== last_id)
 
-#  most recent year with id
-co2_recent_id <- co2_recent |>
-  mutate(.id = last_id) |>
-  as_tsibble(index = Month, key = .id)
+#  most recent year with id 
+co2_recent_id<- co2_recent|>
+  mutate(.id =last_id)|>
+  as_tsibble(index =Month,key =.id)
 
 #  autoplot
-autoplot(co2_cv_fc_last, co2_recent_id) +
-  labs(title = "Final rolling window forecast vs recent 3 years of CO2",
-       x = "Month",
-       y = "Mauna Loa CO2 (ppm)") +
-  theme_minimal()
+autoplot(co2_cv_fc_last, co2_recent_id)+
+  labs(title ="Final rolling window forecast vs recent 3 years of CO2",
+       x ="Month",y ="Mauna Loa CO2 (ppm)") +theme_minimal()
 ```
 
 Because rolling-origin cross-validation re-estimates all models for each expanding window, this step is relatively computationally expensive and may take several minutes to run in a cloud environment.
