@@ -143,7 +143,7 @@ co2_ts |>
   )
 ```
 
-## 2.8. STL - decomposition
+## 2.8. ![Close document tab](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAbElEQVR4Xs2RQQrAMAgEfZgf7W9LAguybljJpR3wEse5JOL3ZObDb4x1loDhHbBOFU6i2Ddnw2KNiXcdAXygJlwE8OFVBHDgKrLgSInN4WMe9iXiqIVsTMjH7z/GhNTEibOxQswcYIWYOR/zAjBJfiXh3jZ6AAAAAElFTkSuQmCC){alt="Close document tab"}STL - decomposition
 
 ```{r}
 # STL decomposition (trend + season + remainder)
@@ -390,25 +390,30 @@ fit_10 <- co2_train_10 |>
 fit_ens <- mutate(fit_10,
     ensemble = (log_tslm + log_ets + log_arima) / 3)
 
-# 5. Forecast the next 12 months (1968)
-# 6.Compute accuracy and sort by RMSE
-fit_ens |>
+# 5. Forecast the next 12 months (1968) and BACK-TRANSFORM log models
+fc_1968 <- fit_ens |>
   forecast(h = "12 months") |>
+  mutate(
+    .mean = if_else(.model == "snaive", .mean, exp(.mean))
+  )
+
+# 6. Compute accuracy on 1968 and sort by RMSE  (now in ppm)
+fc_1968 |>
   accuracy(co2_test_1968) |>
   arrange(RMSE) |>
   select(.model, .type, RMSE, MAE, MAPE, MPE) |>
-  knitr::kable(digits = 2,
+  knitr::kable(
+    digits = 2,
     caption = "Forecast accuracy for 1968 using the first 10 years (1958–1967) as training data"
-)
+  )
 
-# 7. Plot Forecast for 1968 (simple clean version)
-
-fc_1968 <- fit_ens |>
-  forecast(new_data = co2_test_1968)
-
-autoplot(fc_1968, co2) + labs(
-  title = "Forecasts for 1968 (Training: 1958–1967)",
-  x = "Month", y = "CO2 (ppm)") + 
+# 7. Plot Forecast for 1968 (simple clean version, in ppm)
+autoplot(fc_1968, co2) +
+  labs(
+    title = "Forecasts for 1968 (Training: 1958–1967)",
+    x = "Month",
+    y = "CO2 (ppm)"
+  ) +
   coord_cartesian(xlim = c(yearmonth("1958-03"), yearmonth("1968-12")))
 ```
 
@@ -450,7 +455,11 @@ co2_cv_fit_ens <- co2_cv_fit |>
 #   h = 12 months and back-transform log models
 
 co2_cv_fc <- co2_cv_fit_ens |>
-  forecast(h = "12 months") 
+  forecast(h = "12 months") |>
+  mutate(
+    .mean = if_else(.model == "snaive", .mean, exp(.mean))
+  )
+  
 
 # 6. Output cross-validation accuracy table
 last_obs <- max(co2$Month)
@@ -545,7 +554,9 @@ The residual diagnostics indicate that the log-ETS model provides a well-specifi
 
 The residuals show no remaining trend or seasonality, autocorrelation stays within sampling bounds, and the histogram is approximately symmetric. Overall, the model errors behave like white noise, suggesting that the model adequately captures the underlying structure of the CO₂ series.
 
-We performed a Ljung–Box test at lag 24, following the common guideline of using roughly two seasonal cycles for monthly data. The resulting p-value (0.46) provides no evidence of remaining autocorrelation, indicating that the log-ARIMA model has adequately captured the trend and seasonality and that the residuals behave like white noise.
+We performed a Ljung–Box test at lag 24, following the common guideline of using roughly two seasonal cycles for monthly data. The resulting p-value (0.46) provides no evidence of remaining autocorrelation, indicating that the log-ETA model has adequately captured the trend and seasonality and that the residuals behave like white noise.
+
+Finally, we generate forecasts from the log-ETS model and back-transform them to the original ppm scale for interpretation. The forecast path smoothly extends the historical Keeling Curve, and the prediction intervals widen gradually into the future, reflecting increasing uncertainty while remaining consistent with the long-term upward trend observed in the data.
 
 ```{r}
 # Optional: produce back-transformed forecasts from the final model
@@ -553,27 +564,18 @@ final_fc <- final_fit |>
   forecast(new_data = co2_test) |>
   mutate(.mean = exp(.mean))
 
-
-co2_recent <- co2 |>
-  filter (Month > last_obs - 36)
+co2_recent <- co2 |> filter (Month > last_obs - 36)
 
 autoplot(final_fc, co2) +
-  labs(
-    title = "Final log-ETS forecasts back-transformed to CO2 (ppm)",
-    x = "Month",
-    y = "Mauna Loa CO₂ (ppm)"
-  )
+  labs(title = "Final log-ETS forecasts back-transformed to CO2 (ppm)",
+       x = "Month",
+       y = "Mauna Loa CO₂ (ppm)")
 
 autoplot(final_fc, co2_recent) +
   labs(
     title = "Final log-ETS forecasts back-transformed to CO2 (ppm) (recent 10 years)",
-    x = "Month",
-    y = "Mauna Loa CO2 (ppm)"
-  )
-
+    x = "Month", y = "Mauna Loa CO2 (ppm)")
 ```
-
-Finally, we generate forecasts from the log-ETS model and back-transform them to the original ppm scale for interpretation. The forecast path smoothly extends the historical Keeling Curve, and the prediction intervals widen gradually into the future, reflecting increasing uncertainty while remaining consistent with the long-term upward trend observed in the data.
 
 # 7. Final Model Forecasts (2025 Sep – 2026 Aug)
 
@@ -593,12 +595,15 @@ co2_final_fit <- co2 |>
 
 # 2. Forecast next 12 months (2025 Sep – 2026 Aug)
 co2_final_fc <- co2_final_fit |>
-  forecast(h = "12 months")
+  forecast(h = "12 months") |>
+  mutate(.mean  = exp(.mean)
+  )
 
-# 3. Plot forecasts back-transformed to original units
+# 3. Prepare recent historical data for comparison
 co2_recent <- co2 |>
-  filter (Month > last_obs - 36)
+  filter(Month > last_obs - 36)
 
+# 4. Plot (now in ppm correctly)
 autoplot(co2_final_fc, co2_recent) +
   labs(
     title = "Future CO2 Forecast (log-ETS) 2025 Sep – 2026 Aug",
