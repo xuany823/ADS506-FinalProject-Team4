@@ -163,8 +163,6 @@ To assess whether CO₂ levels have been rising at a constant rate or accelerati
 
 This evidence reinforces the visual observation from the raw series: the Keeling Curve’s upward drift has intensified, meaning that each additional year contributes a larger increment than the previous one.
 
-## 
-
 2.9. Simple check on ndays / data quality
 
 ```{r}
@@ -237,7 +235,7 @@ fit |>
   gg_tsresiduals()
 ```
 
-If here we are diagnosing that a Box–Cox transformation was not required, I was referring specifically to the variance-stability diagnostic. The residual plots did not show increasing variance or multiplicative seasonal effects, so from a theoretical standpoint, a transformation isn’t needed to satisfy model assumptions. However, that does not mean a transformation could not improve the model. In practice, even with roughly stable variance, a Box–Cox scan can still be useful for detecting mild skewness or subtle amplitude shifts that only become visible after differencing. Sometimes a small λ adjustment can reduce low-lag autocorrelation and lead to more stable forecast errors across horizons. So again, similar to seasonal differencing: Theory: transformation is not necessary for variance stabilization.
+If here we are diagnosing that a Box–Cox transformation was not required, it was referring specifically to the variance-stability diagnostic. The residual plots did not show increasing variance or multiplicative seasonal effects, so from a theoretical standpoint, a transformation isn’t needed to satisfy model assumptions. However, that does not mean a transformation could not improve the model. In practice, even with roughly stable variance, a Box–Cox scan can still be useful for detecting mild skewness or subtle amplitude shifts that only become visible after differencing. Sometimes a small λ adjustment can reduce low-lag autocorrelation and lead to more stable forecast errors across horizons. So again, similar to seasonal differencing: Theory: transformation is not necessary for variance stabilization.
 
 Practice: testing a Box–Cox transformation may still enhance model flexibility and residual behavior. These two perspectives are complementary rather than contradictory.
 
@@ -402,7 +400,7 @@ autoplot(fc_1968, co2) + labs(
 
 ### Step2: Rolling-Origin Cross-Validation (10-year initial window, 1-year increments)
 
--   create a tsibble with cross-validation series that starts with 10 years (118 months) of data and adds one year at time through 2024.
+-   Create a tsibble with cross-validation series that starts with 10 years (118 months) of data and adds one year at time through 2024.
 -   Fit the same models from the previous step
 -   Report the model metrics sorted by RMSE for each model across all validation intervals.
 
@@ -483,11 +481,11 @@ Because rolling-origin cross-validation re-estimates all models for each expandi
 
 To structure the forecasting analysis, I evaluate the models under three complementary settings.
 
-1.  I begin with a standard 80/20 hold-out split to compare model performance on both the original and log-transformed CO₂ series, establishing a baseline for in-sample and out-of-sample accuracy.
+1.  We begin with a standard 80/20 hold-out split to compare model performance on both the original and log-transformed CO₂ series, establishing a baseline for in-sample and out-of-sample accuracy.
 
-2.  Next, I use a fixed 10-year training window (1958–1967) to forecast the following 12 months, replicating a realistic short-horizon forecasting scenario based on limited historical data.
+2.  Next, We use a fixed 10-year training window (1958–1967) to forecast the following 12 months, replicating a realistic short-horizon forecasting scenario based on limited historical data.
 
-3.  Finally, I extend this design with a rolling-origin cross-validation framework, starting with the same 10-year window and expanding it one year at a time, which provides a more robust assessment of model stability and average forecast accuracy across multiple validation intervals.
+3.  Finally, We extend this design with a rolling-origin cross-validation framework, starting with the same 10-year window and expanding it one year at a time, which provides a more robust assessment of model stability and average forecast accuracy across multiple validation intervals.
 
 # 5. Model Comparison and Selection
 
@@ -518,10 +516,10 @@ Residual diagnostics for final log-ARIMA model
 ljung-box test with sufficient lags
 
 ```{r}
-# Residual diagnostics for final log-ARIMA model
+# Residual diagnostics for final log-ETS model
 final_fit |>
   gg_tsresiduals() +
-  labs(title = "Residual diagnostics for final log-ARIMA model")
+  labs(title = "Residual diagnostics for final log-ETS model")
 
 # perform a ljung-box test with sufficient lags
 final_fit |>
