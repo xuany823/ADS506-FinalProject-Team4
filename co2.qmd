@@ -199,7 +199,7 @@ co2_ts |>
 co2_ts |> gg_tsdisplay(average, plot_type = "partial")
 ```
 
-We evaluated whether additional smoothing was necessary by examining the stability of the trend and seasonal patterns in the raw monthly CO2 series (Figure1). Figure 1 showed a very smooth long-term upward trajectory with minimal short-term noise, indicating that the underlying trend is already well-behaved and does not require moving averages or other smoothing techniques. Seasonal diagnostics (Figure 4 and Figure 5) showed a highly regular and stable annual cycle, further suggesting that no smoothing is needed to refine or enhance the seasonal pattern. The STL decomposition plot (Figure 10) reinforced these observations: the trend component was smooth and continuous, and the remainder showed no unusual fluctuations. Together, these results indicate that the CO2 series does not require additional smoothing prior to modeling, and the raw monthly values can be used directly in TSLM or ARIMA-based forecasts. However, further smoothing would be necessary if short-term volatility, irregular spikes, or noise were present that obscured the underlying structure, as smoothing would help isolate the signal and improve model interpretability prior to forecasting.
+We evaluated whether additional smoothing was necessary by examining the stability of the trend and seasonal patterns in the raw monthly CO2 series (Figure1). the original monthly trend showed a very smooth long-term upward trajectory with minimal short-term noise, indicating that the underlying trend is already well-behaved and does not require moving averages or other smoothing techniques. Seasonal diagnostics (section 2.6) showed a highly regular and stable annual cycle, further suggesting that no smoothing is needed to refine or enhance the seasonal pattern. The STL decomposition plot reinforced these observations: the trend component was smooth and continuous, and the remainder showed no unusual fluctuations. Together, these results indicate that the CO2 series does not require additional smoothing prior to modeling, and the raw monthly values can be used directly in TSLM or ARIMA-based forecasts. However, further smoothing would be necessary if short-term volatility, irregular spikes, or noise were present that obscured the underlying structure, as smoothing would help isolate the signal and improve model interpretability prior to forecasting.
 
 ## 3.2 **Evaluate if differencing is needed**
 
@@ -241,7 +241,15 @@ Practice: testing a Box–Cox transformation may still enhance model flexibility
 
 ## 3.4 Summary of EDA & Preprocessing Insights
 
-A strong, nonlinear upward trend Highly stable annual seasonality No problematic outliers Minimal missing data and clean measurement structure Strong autocorrelation and non-stationarity( theoretically) No strong need for variance transformation (but may be explored for model refinement) ARIMA models will require differencing.
+1.  A strong, nonlinear upward trend Highly stable annual seasonality
+
+2.  No problematic outliers
+
+3.  Minimal missing data and clean measurement structure
+
+4.  Strong autocorrelation and non-stationarity( theoretically)
+
+5.  No strong need for variance transformation (but may be explored for model refinement) ARIMA models will require differencing.
 
 ## 3.5 Tsibble Formatting (Before modeling)
 
@@ -334,7 +342,13 @@ knitr::kable(test_acc, digits = 2,
 
 ## 4.5 Best model parameters
 
-Which is the best performance model on test set and training set? what are the model parameters? The best performing model on both the training and test sets is the log_ets model. The model parameters for the log_ets model are as follows. We also gather the parameters for all models for rolling origin cross validation modeling.
+Which is the best performance model on test set and training set?
+
+what are the model parameters?
+
+The best performing model on both the training and test sets is the log_ets model. The model parameters for the log_ets model are as follows. We also gather the parameters for all models for rolling origin cross validation modeling.
+
+Based on the KPSS test (p = 0.01), at least one regular difference was required. Our final Auto ARIMA model implemented **d = 1**, along with a seasonal difference (**D = 1**) to handle annual seasonality, resulting in the fitted model ARIMA(1,1,1)(2,1,2)\[12\]
 
 ```{r}
 co2_fit |> t()
@@ -342,7 +356,7 @@ co2_fit |> t()
 
 ## 4.6 Rolling Origin Cross-validation
 
-### Step1: Compare models the first 10 years of the CO2 training data (no CV)
+### Step1: Modeling with the first 10 years of the CO2 training data (no CV)
 
 -   Use only the first 10 years of the data
 -   Create the 3 models above on the log transformed data
@@ -477,7 +491,7 @@ autoplot(co2_cv_fc_last, co2_recent_id)+
 
 Because rolling-origin cross-validation re-estimates all models for each expanding window, this step is relatively computationally expensive and may take several minutes to run in a cloud environment.
 
-## 4.6 Modeling Summary:
+## 4.7 Modeling Summary:
 
 To structure the forecasting analysis, I evaluate the models under three complementary settings.
 
