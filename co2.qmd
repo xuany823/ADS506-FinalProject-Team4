@@ -510,7 +510,7 @@ To structure the forecasting analysis, I evaluate the models under three complem
 
 3.  Finally, We extend this design with a rolling-origin cross-validation framework, starting with the same 10-year window and expanding it one year at a time, which provides a more robust assessment of model stability and average forecast accuracy across multiple validation intervals.
 
-# 5. Model Comparison and Selection
+#   5. Model Comparison and Selection
 
 Our model comparisons produced different rankings depending on the validation structure.
 
