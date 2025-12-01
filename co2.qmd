@@ -9,7 +9,7 @@ format: pdf
 Overview: The analysis uses monthly CO2 measurements from Mauna Loa Observatory.
 
 NOAA Global Monitoring Laboratory\
-Atmospheric CO₂, Mauna Loa Observatory – Monthly Dataset\
+Atmospheric CO2, Mauna Loa Observatory – Monthly Dataset\
 <https://gml.noaa.gov/ccgg/trends/data.html>
 
 # 1. Data Preparation:
@@ -155,9 +155,9 @@ autoplot(co2_stl) + labs(title = "STL Decomposition of Monthly CO2")
 
 ```
 
-**Modeling Evidence: Acceleration in the CO₂ Trend**
+**Modeling Evidence: Acceleration in the CO2 Trend**
 
-To assess whether CO₂ levels have been rising at a constant rate or accelerating over time, I fitted an STL decomposition to the full monthly series. The extracted trend component shows a noticeable change in curvature: the slope is relatively moderate during the 1960s–1980s, but becomes substantially steeper from the 1990s onward. This indicates that the long-term increase is not linear—**the rate of CO₂ accumulation has accelerated in recent decades**.
+To assess whether CO2 levels have been rising at a constant rate or accelerating over time, I fitted an STL decomposition to the full monthly series. The extracted trend component shows a noticeable change in curvature: the slope is relatively moderate during the 1960s–1980s, but becomes substantially steeper from the 1990s onward. This indicates that the long-term increase is not linear—**the rate of CO2 accumulation has accelerated in recent decades**.
 
 **STL decomposition showing an increasingly steep trend component (App settings: Full dataset, default STL).**
 
@@ -263,7 +263,7 @@ co2 <- co2_ts |>
 
 # 4. Model Building
 
-Based on the earlier EDA and preprocessing steps, the Mauna Loa CO₂ series shows a strong nonlinear upward trend, highly regular annual seasonality, and approximately constant variance. Therefore, we proceed without any log or Box–Cox transformation and fit several automatic benchmark models to the untransformed monthly averages. To enable out-of-sample evaluation, we split the data into an 80/20 train–test partition and compare model performance across four classes: TSLM, ETS, ARIMA, and snaive.
+Based on the earlier EDA and preprocessing steps, the Mauna Loa CO2 series shows a strong nonlinear upward trend, highly regular annual seasonality, and approximately constant variance. Therefore, we proceed without any log or Box–Cox transformation and fit several automatic benchmark models to the untransformed monthly averages. To enable out-of-sample evaluation, we split the data into an 80/20 train–test partition and compare model performance across four classes: TSLM, ETS, ARIMA, and snaive.
 
 ## 4.1 Train/Test Split (80/20)
 
@@ -518,11 +518,11 @@ This is expected because each framework emphasizes a different forecasting chall
 
 1.  **Using a simple 80/20 split**, the log-transformed ARIMA and ETS models performed best.This setup involves forecasting nearly ten years ahead, where capturing the accelerating trend is essential.
 
-2.  **When evaluating only 1968 using the initial ten years as training**, ETS achieved the lowest error. The early CO₂ series exhibits almost linear trend and stable seasonal amplitude, which makes short-horizon forecasting comparatively easy.
+2.  **When evaluating only 1968 using the initial ten years as training**, ETS achieved the lowest error. The early CO2 series exhibits almost linear trend and stable seasonal amplitude, which makes short-horizon forecasting comparatively easy.
 
 3.  **Under rolling-origin cross-validation**, log-ETS again emerged as the most consistently accurate model, followed closely by log-ARIMA. This method averages performance across multiple decades and provides the most realistic assessment of generalization over changing trend and seasonality patterns.
 
-Across all metrics, **log-ets and log_arima offer the strongest balance of adaptability, stability, and interpretability**, making it the most reliable choice for CO₂ forecasting in this project.
+Across all metrics, **log-ets and log_arima offer the strongest balance of adaptability, stability, and interpretability**, making it the most reliable choice for CO2 forecasting in this project.
 
 # 6. Final Model Diagnostics
 
@@ -568,7 +568,7 @@ final_fit_arima|>
   features(.innov, ljung_box, lag=24)
 ```
 
-Both models capture the long-term upward trend and seasonal pattern of atmospheric CO₂, but the log-ARIMA model provides noticeably cleaner residuals. Its ACF shows no remaining autocorrelation and the Ljung–Box p-value (0.53) indicates white-noise errors, while the log-ETS model shows borderline autocorrelation (p = 0.046). Therefore, log-ARIMA offers a more statistically adequate fit for this series.
+Both models capture the long-term upward trend and seasonal pattern of atmospheric CO2, but the log-ARIMA model provides noticeably cleaner residuals. Its ACF shows no remaining autocorrelation and the Ljung–Box p-value (0.53) indicates white-noise errors, while the log-ETS model shows borderline autocorrelation (p = 0.046). Therefore, log-ARIMA offers a more statistically adequate fit for this series.
 
 **1. Residual time series (ETS / ARIMA)**
 
@@ -576,7 +576,7 @@ Both models capture the long-term upward trend and seasonal pattern of atmospher
 
 **ARIMA:** Residuals fluctuate randomly around zero with no visible patterns.
 
-### **2. ACF plot (ETS / ARIMA)**
+**2. ACF plot (ETS / ARIMA)**
 
 **ETS:** Several spikes approach or exceed the confidence bands, indicating remaining autocorrelation.
 
@@ -609,7 +609,7 @@ co2_recent <- co2 |> filter (Month > last_obs - 36)
 autoplot(final_fc, co2) +
   labs(title = "Final log-ARIMA forecasts CO2 (ppm)",
        x = "Month",
-       y = "Mauna Loa CO₂ (ppm)")
+       y = "Mauna Loa CO2 (ppm)")
 
 autoplot(final_fc, co2_recent) +
   labs(
@@ -621,11 +621,11 @@ autoplot(final_fc, co2_recent) +
 
 Use the best performing model to create a forecast for each month in next 12 month (2025 Sep to 2026 Aug).
 
--   Based on the rolling-origin cross-validation results, the **log-ARIMA**model demonstrated the most stable and accurate performance across multiple decades of the CO₂ series. We therefore selected log-ETS as the final forecasting model for the next stage of analysis.
+-   Based on the rolling-origin cross-validation results, the **log-ARIMA**model demonstrated the most stable and accurate performance across multiple decades of the CO2 series. We therefore selected log-ETS as the final forecasting model for the next stage of analysis.
 
--   Using the full historical dataset (1958–2025 Aug), we refit a final log-ARIMA model and generated **12-month-ahead monthly forecasts from 2025 Sep through 2026 Aug**. The forecasts were back-transformed from the log scale to the original CO₂ concentration units (ppm).
+-   Using the full historical dataset (1958–2025 Aug), we refit a final log-ARIMA model and generated **12-month-ahead monthly forecasts from 2025 Sep through 2026 Aug**. The forecasts were back-transformed from the log scale to the original CO2 concentration units (ppm).
 
--   The resulting trajectory continues the long-term upward trend in atmospheric CO₂, with seasonal peaks early in the calendar year and troughs near late summer. The prediction intervals widen gradually over the forecast horizon, reflecting uncertainty in both the trend acceleration and seasonal amplitude as we project further into the future.
+-   The resulting trajectory continues the long-term upward trend in atmospheric CO2, with seasonal peaks early in the calendar year and troughs near late summer. The prediction intervals widen gradually over the forecast horizon, reflecting uncertainty in both the trend acceleration and seasonal amplitude as we project further into the future.
 
 ```{r}
 
@@ -655,9 +655,9 @@ autoplot(co2_final_fc, co2_recent) +
 
 The 12-month forecast from **September 2025 to August 2026** shows:
 
-1.  **A continued upward trend**, consistent with the long-term trajectory of the Mauna Loa CO₂ series.
+1.  **A continued upward trend**, consistent with the long-term trajectory of the Mauna Loa CO2 series.
 
-2.  **Seasonal oscillations**, with CO₂ peaking around May and dipping around late summer.
+2.  **Seasonal oscillations**, with CO2 peaking around May and dipping around late summer.
 
 3.  **Prediction intervals that widen over time**, indicating greater forecast uncertainty at longer horizons.
 
