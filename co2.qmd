@@ -263,7 +263,7 @@ co2 <- co2_ts |>
 
 # 4. Model Building
 
-Based on the earlier EDA and preprocessing steps, the Mauna Loa CO₂ series shows a strong nonlinear upward trend, highly regular annual seasonality, and approximately constant variance. Therefore, we proceed without any log or Box–Cox transformation and fit several automatic benchmark models to the untransformed monthly averages. To enable out-of-sample evaluation, we split the data into an 80/20 train–test partition and compare model performance across four classes: TSLM, ETS, ARIMA, and NNAR.
+Based on the earlier EDA and preprocessing steps, the Mauna Loa CO₂ series shows a strong nonlinear upward trend, highly regular annual seasonality, and approximately constant variance. Therefore, we proceed without any log or Box–Cox transformation and fit several automatic benchmark models to the untransformed monthly averages. To enable out-of-sample evaluation, we split the data into an 80/20 train–test partition and compare model performance across four classes: TSLM, ETS, ARIMA, and snaive.
 
 ## 4.1 Train/Test Split (80/20)
 
@@ -504,13 +504,13 @@ Because rolling-origin cross-validation re-estimates all models for each expandi
 
 To structure the forecasting analysis, I evaluate the models under three complementary settings.
 
-1.  We begin with a standard 80/20 hold-out split to compare model performance on both the original and log-transformed CO₂ series, establishing a baseline for in-sample and out-of-sample accuracy.
+1.  We begin with a standard 80/20 hold-out split to compare model performance on both the original and log-transformed CO2 series, establishing a baseline for in-sample and out-of-sample accuracy.
 
 2.  Next, We use a fixed 10-year training window (1958–1967) to forecast the following 12 months, replicating a realistic short-horizon forecasting scenario based on limited historical data.
 
 3.  Finally, We extend this design with a rolling-origin cross-validation framework, starting with the same 10-year window and expanding it one year at a time, which provides a more robust assessment of model stability and average forecast accuracy across multiple validation intervals.
 
-#   5. Model Comparison and Selection
+# 5. Model Comparison and Selection
 
 Our model comparisons produced different rankings depending on the validation structure.
 
@@ -522,58 +522,98 @@ This is expected because each framework emphasizes a different forecasting chall
 
 3.  **Under rolling-origin cross-validation**, log-ETS again emerged as the most consistently accurate model, followed closely by log-ARIMA. This method averages performance across multiple decades and provides the most realistic assessment of generalization over changing trend and seasonality patterns.
 
-Across all metrics, **log-ets offers the strongest balance of adaptability, stability, and interpretability**, making it the most reliable choice for CO₂ forecasting in this project.
+Across all metrics, **log-ets and log_arima offer the strongest balance of adaptability, stability, and interpretability**, making it the most reliable choice for CO₂ forecasting in this project.
 
 # 6. Final Model Diagnostics
 
+Residual diagnostics for final log_ets and log_arimamodel
+
 ```{r}
-# Extract the final model: log_arima
-final_fit <- co2_fit |>
+# Extract the final model: log_ets
+final_fit_ets <- co2_fit |>
   select(log_ets)
 
-report(final_fit)
+report(final_fit_ets)
 ```
 
-Residual diagnostics for final log-ARIMA model
+```{r}
+# Extract the final model: log_arima
+final_fit_arima <- co2_fit |>
+  select(log_arima)
 
-ljung-box test with sufficient lags
+report(final_fit_arima)
+```
+
+ljung-box test with sufficient lags=24
 
 ```{r}
 # Residual diagnostics for final log-ETS model
-final_fit |>
+final_fit_ets |>
   gg_tsresiduals() +
   labs(title = "Residual diagnostics for final log-ETS model")
 
 # perform a ljung-box test with sufficient lags
-final_fit |>
+final_fit_ets|>
+  augment() |>
+  features(.innov, ljung_box, lag=24)
+
+# Residual diagnostics for final log-arima model
+final_fit_arima |>
+  gg_tsresiduals() +
+  labs(title = "Residual diagnostics for final log-ARIMA model")
+
+# perform a ljung-box test with sufficient lags
+final_fit_arima|>
   augment() |>
   features(.innov, ljung_box, lag=24)
 ```
 
-The residual diagnostics indicate that the log-ETS model provides a well-specified fit.
+Both models capture the long-term upward trend and seasonal pattern of atmospheric CO₂, but the log-ARIMA model provides noticeably cleaner residuals. Its ACF shows no remaining autocorrelation and the Ljung–Box p-value (0.53) indicates white-noise errors, while the log-ETS model shows borderline autocorrelation (p = 0.046). Therefore, log-ARIMA offers a more statistically adequate fit for this series.
 
-The residuals show no remaining trend or seasonality, autocorrelation stays within sampling bounds, and the histogram is approximately symmetric. Overall, the model errors behave like white noise, suggesting that the model adequately captures the underlying structure of the CO₂ series.
+**1. Residual time series (ETS / ARIMA)**
 
-We performed a Ljung–Box test at lag 24, following the common guideline of using roughly two seasonal cycles for monthly data. The resulting p-value (0.46) provides no evidence of remaining autocorrelation, indicating that the log-ETA model has adequately captured the trend and seasonality and that the residuals behave like white noise.
+**ETS:** Residuals show small clusters and mild structure across time.
 
-Finally, we generate forecasts from the log-ETS model and back-transform them to the original ppm scale for interpretation. The forecast path smoothly extends the historical Keeling Curve, and the prediction intervals widen gradually into the future, reflecting increasing uncertainty while remaining consistent with the long-term upward trend observed in the data.
+**ARIMA:** Residuals fluctuate randomly around zero with no visible patterns.
+
+### **2. ACF plot (ETS / ARIMA)**
+
+**ETS:** Several spikes approach or exceed the confidence bands, indicating remaining autocorrelation.
+
+**ARIMA:** All autocorrelations fall well within the bands, suggesting no remaining time dependence.
+
+**3. Residual histogram (ETS / ARIMA)**
+
+**ETS:** Residuals are roughly symmetric but slightly more dispersed.
+
+**ARIMA:** Residuals form a tighter, more centered distribution consistent with white noise.
+
+**4. Ljung–Box test (ETS / ARIMA)**
+
+**ETS:** p ≈ 0.046, indicating borderline residual autocorrelation.
+
+**ARIMA:** p ≈ 0.53, confirming residuals behave like white noise.
+
+We performed a Ljung–Box test at lag 24, following the common guideline of using roughly two seasonal cycles for monthly data. The resulting p-value (0.53) provides no evidence of remaining autocorrelation, indicating that the log_arima model has adequately captured the trend and seasonality and that the residuals behave like white noise.
+
+Finally, we generate forecasts from the log_arima model and back-transform them to the original ppm scale for interpretation. The forecast path smoothly extends the historical Keeling Curve, and the prediction intervals widen gradually into the future, reflecting increasing uncertainty while remaining consistent with the long-term upward trend observed in the data.
 
 ```{r}
 # Optional: produce back-transformed forecasts from the final model
-final_fc <- final_fit |>
+final_fc <- final_fit_arima |>
   forecast(new_data = co2_test) |>
   mutate(.mean = exp(.mean))
 
 co2_recent <- co2 |> filter (Month > last_obs - 36)
 
 autoplot(final_fc, co2) +
-  labs(title = "Final log-ETS forecasts back-transformed to CO2 (ppm)",
+  labs(title = "Final log-ARIMA forecasts CO2 (ppm)",
        x = "Month",
        y = "Mauna Loa CO₂ (ppm)")
 
 autoplot(final_fc, co2_recent) +
   labs(
-    title = "Final log-ETS forecasts back-transformed to CO2 (ppm) (recent 10 years)",
+    title = "Final log-ARIMA forecasts CO2 (ppm) recent 10 years",
     x = "Month", y = "Mauna Loa CO2 (ppm)")
 ```
 
@@ -581,9 +621,9 @@ autoplot(final_fc, co2_recent) +
 
 Use the best performing model to create a forecast for each month in next 12 month (2025 Sep to 2026 Aug).
 
--   Based on the rolling-origin cross-validation results, the **log-ETS model** demonstrated the most stable and accurate performance across multiple decades of the CO₂ series. We therefore selected log-ETS as the final forecasting model for the next stage of analysis.
+-   Based on the rolling-origin cross-validation results, the **log-ARIMA**model demonstrated the most stable and accurate performance across multiple decades of the CO₂ series. We therefore selected log-ETS as the final forecasting model for the next stage of analysis.
 
--   Using the full historical dataset (1958–2025 Aug), we refit a final log-ETS model and generated **12-month-ahead monthly forecasts from 2025 Sep through 2026 Aug**. The forecasts were back-transformed from the log scale to the original CO₂ concentration units (ppm).
+-   Using the full historical dataset (1958–2025 Aug), we refit a final log-ARIMA model and generated **12-month-ahead monthly forecasts from 2025 Sep through 2026 Aug**. The forecasts were back-transformed from the log scale to the original CO₂ concentration units (ppm).
 
 -   The resulting trajectory continues the long-term upward trend in atmospheric CO₂, with seasonal peaks early in the calendar year and troughs near late summer. The prediction intervals widen gradually over the forecast horizon, reflecting uncertainty in both the trend acceleration and seasonal amplitude as we project further into the future.
 
@@ -591,7 +631,7 @@ Use the best performing model to create a forecast for each month in next 12 mon
 
 # 1. Refit the final model using full historical data
 co2_final_fit <- co2 |>
-  model(log_ets = ETS(log(average)))
+  model(log_arima = ARIMA(log(average)))
 
 # 2. Forecast next 12 months (2025 Sep – 2026 Aug)
 co2_final_fc <- co2_final_fit |>
@@ -606,7 +646,7 @@ co2_recent <- co2 |>
 # 4. Plot (now in ppm correctly)
 autoplot(co2_final_fc, co2_recent) +
   labs(
-    title = "Future CO2 Forecast (log-ETS) 2025 Sep – 2026 Aug",
+    title = "Future CO2 Forecast (log-ARIMA) 2025 Sep – 2026 Aug",
     x = "Month",
     y = "CO2 concentration (ppm)"
   ) +
