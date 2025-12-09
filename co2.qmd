@@ -1,7 +1,8 @@
 ---
-title: "CO2 Analysis"
+title: "Forecasting Atmospheric CO₂ at Mauna Loa: A Multi-Stage Time-Series Evaluation and 12-Month Projection"
 author: "Michelle_Wang, Vinh_Dao, Duy_Dang"
 format: pdf
+submission date: 12-08-2025
 ---
 
 ## **ADS506-FinalProject-Team4**
@@ -11,6 +12,8 @@ Overview: The analysis uses monthly CO2 measurements from Mauna Loa Observatory.
 NOAA Global Monitoring Laboratory\
 Atmospheric CO2, Mauna Loa Observatory – Monthly Dataset\
 <https://gml.noaa.gov/ccgg/trends/data.html>
+
+Github: <https://github.com/xuany823/ADS506-FinalProject-Team4/blob/main/co2.qmd>
 
 # 1. Data Preparation:
 
@@ -143,7 +146,7 @@ co2_ts |>
   )
 ```
 
-## 2.8. ![Close document tab](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAbElEQVR4Xs2RQQrAMAgEfZgf7W9LAguybljJpR3wEse5JOL3ZObDb4x1loDhHbBOFU6i2Ddnw2KNiXcdAXygJlwE8OFVBHDgKrLgSInN4WMe9iXiqIVsTMjH7z/GhNTEibOxQswcYIWYOR/zAjBJfiXh3jZ6AAAAAElFTkSuQmCC){alt="Close document tab"}STL - decomposition
+## 2.8. STL - decomposition
 
 ```{r}
 # STL decomposition (trend + season + remainder)
@@ -226,6 +229,7 @@ Given the findings from previous EDA steps, we ran some preprocessing steps by f
 **Auto ARIMA for residual dignostics**
 
 ```{r}
+#| warning: false
 fit <- co2_ts |>
   model(
     arima = ARIMA(average))
@@ -296,7 +300,7 @@ co2_fit <- co2_train |>
     log_ets  = ETS(log(average)),
     log_arima = ARIMA(log(average)),
     snaive    = SNAIVE(average))
-    #auto_nnar  = NNETAR(average, repeats = 5)
+    #auto_nnar  = NNETAR(average)
 
 ```
 
@@ -325,15 +329,14 @@ co2_fc <- co2_fit |>
 
 # Plot forecasts against the full series
 co2_fc |> autoplot(co2) +
-  labs(title = "Forecasts from automatic TSLM, ETS, ARIMA, and NNAR models",
-    x = "Month", y = "Mauna Loa CO2 (ppm)"
-  )
+  labs(title = "Forecasts 20% hold-out with TSLM, ETS, ARIMA, and Snaive models",
+    x = "Month", y = "Mauna Loa CO2 (ppm)")
 
 # Forecast (test) accuracy on the 20% hold-out period
 test_acc <- co2_fc |>
   accuracy(co2_test) |>
   arrange(RMSE) |>
-  select(.model, .type, RMSE, MAE, MAPE, MPE)
+  select(.model: MAPE)
 
 knitr::kable(test_acc, digits = 2,
              caption = "Forecast accuracy on the 20% hold-out period")
@@ -387,33 +390,28 @@ fit_10 <- co2_train_10 |>
   )
 
 # 4. Build ensemble of the 3 regression models using a simple average
-fit_ens <- mutate(fit_10,
-    ensemble = (log_tslm + log_ets + log_arima) / 3)
+fit_ens <- mutate(fit_10, 
+                  ensemble = (log_tslm + log_ets + log_arima) / 3)
 
 # 5. Forecast the next 12 months (1968) and BACK-TRANSFORM log models
 fc_1968 <- fit_ens |>
   forecast(h = "12 months") |>
   mutate(
-    .mean = if_else(.model == "snaive", .mean, exp(.mean))
-  )
+    .mean = if_else(.model == "snaive", .mean, exp(.mean)))
 
 # 6. Compute accuracy on 1968 and sort by RMSE  (now in ppm)
 fc_1968 |>
   accuracy(co2_test_1968) |>
   arrange(RMSE) |>
-  select(.model, .type, RMSE, MAE, MAPE, MPE) |>
+  select(.model:MAPE) |>
   knitr::kable(
     digits = 2,
-    caption = "Forecast accuracy for 1968 using the first 10 years (1958–1967) as training data"
-  )
+    caption = "Forecast accuracy for 1968 using the first 10 years (1958–1967) as training data")
 
 # 7. Plot Forecast for 1968 (simple clean version, in ppm)
 autoplot(fc_1968, co2) +
-  labs(
-    title = "Forecasts for 1968 (Training: 1958–1967)",
-    x = "Month",
-    y = "CO2 (ppm)"
-  ) +
+  labs(title = "Forecasts for 1968 (Training: 1958–1967)",
+       x = "Month", y = "CO2 (ppm)") +
   coord_cartesian(xlim = c(yearmonth("1958-03"), yearmonth("1968-12")))
 ```
 
@@ -494,7 +492,7 @@ co2_recent_id<- co2_recent|>
 
 #  autoplot
 autoplot(co2_cv_fc_last, co2_recent_id)+
-  labs(title ="Final rolling window forecast vs recent 3 years of CO2",
+  labs(title ="Rolling window forecast with recent 3 years of CO2",
        x ="Month",y ="Mauna Loa CO2 (ppm)") +theme_minimal()
 ```
 
@@ -547,6 +545,7 @@ report(final_fit_arima)
 ljung-box test with sufficient lags=24
 
 ```{r}
+#| warning: false
 # Residual diagnostics for final log-ETS model
 final_fit_ets |>
   gg_tsresiduals() +
